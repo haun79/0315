@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>犯罪現場：30個謎團 - 推理遊戲</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <!-- 標題欄 -->
+        <header>
+            <h1>犯罪現場：30個謎團</h1>
+            <div id="level-display">案件 #1</div>
+        </header>
+
+        <main>
+            <!-- 左側：嫌疑人清單 -->
+            <section id="suspects-panel">
+                <h2>嫌疑人名單</h2>
+                <div id="suspect-list">
+                    <!-- 由 JS 動態生成 -->
+                </div>
+            </section>
+
+            <!-- 中央：對話歷史 -->
+            <section id="dialogue-panel">
+                <div id="dialogue-history">
+                    <div class="msg system">歡迎來到犯罪現場。請點擊嫌疑人開始問話。</div>
+                </div>
+                <div id="question-actions" class="hidden">
+                    <p>對 <span id="target-name">...</span> 詢問：</p>
+                    <div class="btn-group">
+                        <button onclick="handleQuestion('WHERE')">你當時在哪？</button>
+                        <button onclick="handleQuestion('WITNESS')">你看到什麼嗎？</button>
+                        <button onclick="handleQuestion('WEAPON')">有看到可疑物品嗎？</button>
+                        <button onclick="handleQuestion('ACCUSE')">你是兇手嗎？</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 右側：推理與指認 -->
+            <section id="inference-panel">
+                <h2>推理筆記</h2>
+                <div class="input-group">
+                    <label>指認兇手：</label>
+                    <select id="accuse-suspect">
+                        <option value="">-- 請選擇嫌疑人 --</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>案發地點：</label>
+                    <select id="accuse-location">
+                        <option value="">-- 請選擇地點 --</option>
+                        <option value="書房">書房</option>
+                        <option value="廚房">廚房</option>
+                        <option value="客廳">客廳</option>
+                        <option value="花園">花園</option>
+                        <option value="車庫">車庫</option>
+                        <option value="地下室">地下室</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>作案武器：</label>
+                    <select id="accuse-weapon">
+                        <option value="">-- 請選擇武器 --</option>
+                        <option value="刀">刀</option>
+                        <option value="繩子">繩子</option>
+                        <option value="毒藥">毒藥</option>
+                        <option value="鐵棒">鐵棒</option>
+                        <option value="火槍">火槍</option>
+                        <option value="花瓶">花瓶</option>
+                    </select>
+                </div>
+                <button id="solve-btn" onclick="handleSolve()">指認並提交</button>
+            </section>
+        </main>
+    </div>
+
+    <!-- 成功/失敗 彈窗 -->
+    <div id="modal" class="hidden">
+        <div class="modal-content">
+            <h2 id="modal-title">結果</h2>
+            <p id="modal-body"></p>
+            <button onclick="closeModal()">繼續</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+    <script>
+        let selectedSuspect = null;
+
+        function initUI() {
+            const currentCase = window.game.startNewGame();
+            document.getElementById('level-display').innerText = `案件 #${window.game.currentLevel}`;
+            
+            // 生成嫌疑人按鈕
+            const list = document.getElementById('suspect-list');
+            list.innerHTML = '';
+            const accuseSelect = document.getElementById('accuse-suspect');
+            accuseSelect.innerHTML = '<option value="">-- 請選擇嫌疑人 --</option>';
+
+            currentCase.suspects.forEach(s => {
+                const btn = document.createElement('button');
+                btn.className = 'suspect-btn';
+                btn.innerText = s.name;
+                btn.onclick = () => selectSuspect(s.name);
+                list.appendChild(btn);
+
+                const opt = document.createElement('option');
+                opt.value = s.name;
+                opt.innerText = s.name;
+                accuseSelect.appendChild(opt);
+            });
+
+            // 清空對話紀錄
+            const history = document.getElementById('dialogue-history');
+            history.innerHTML = '<div class="msg system">歡迎來到犯罪現場。請點擊嫌疑人開始問話。</div>';
+
+            addLog("system", "新案件已生成，請開始調查。");
+        }
+
+        function selectSuspect(name) {
+            selectedSuspect = name;
+            document.getElementById('target-name').innerText = name;
+            const actions = document.getElementById('question-actions');
+            actions.classList.remove('hidden');
+            
+            // 精確跳轉到詢問按鈕區域，並留出一點邊距
+            setTimeout(() => {
+                actions.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+        }
+
+        function handleQuestion(type) {
+            if (!selectedSuspect) return;
+            const answer = window.game.askQuestion(selectedSuspect, type);
+            
+            const qText = {
+                'WHERE': '你當時在哪？',
+                'WITNESS': '你看到什麼嗎？',
+                'WEAPON': '有看到可疑物品嗎？',
+                'ACCUSE': '你是兇手嗎？'
+            }[type];
+
+            addLog("player", `提問 ${selectedSuspect}：${qText}`);
+            setTimeout(() => {
+                addLog("npc", `${selectedSuspect}：${answer}`);
+            }, 500);
+        }
+
+        function addLog(type, text) {
+            const history = document.getElementById('dialogue-history');
+            const div = document.createElement('div');
+            div.className = `msg ${type}`;
+            div.innerText = text;
+            history.appendChild(div);
+            history.scrollTop = history.scrollHeight;
+        }
+
+        function handleSolve() {
+            const s = document.getElementById('accuse-suspect').value;
+            const l = document.getElementById('accuse-location').value;
+            const w = document.getElementById('accuse-weapon').value;
+
+            if (!s || !l || !w) {
+                alert("請務必選擇兇手、地點與武器！");
+                return;
+            }
+
+            const result = window.game.solve(s, l, w);
+            showModal(result.success ? "成功" : "失敗", result.message, result.success);
+        }
+
+        function showModal(title, body, success) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-body').innerText = body;
+            document.getElementById('modal').classList.remove('hidden');
+            window.lastResultSuccess = success;
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+            if (window.lastResultSuccess) {
+                initUI();
+            }
+        }
+
+        window.onload = initUI;
+    </script>
+</body>
+</html>
